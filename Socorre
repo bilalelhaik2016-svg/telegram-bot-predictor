@@ -1,0 +1,52 @@
+import os
+import requests
+from telegram import Update
+from telegram.ext import ApplicationBuilder, CommandHandler, ContextTypes
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+
+TOKEN = os.getenv("TOKEN")
+API_URL = os.getenv("API_URL")
+CHAT_ID = os.getenv("CHAT_ID")
+
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("👋 مرحبا! استعمل /tips")
+
+async def tips(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    res = requests.get(API_URL).json()
+
+    if not res:
+        await update.message.reply_text("❌ لا توجد توقعات")
+        return
+
+    message = "🔥 أفضل التوقعات:\n\n"
+
+    for m in res[:3]:
+        message += f"⚽ {m['match']}\n"
+        message += f"🏆 {m['prediction']}\n"
+        message += f"📊 {m['score']}\n\n"
+
+    await update.message.reply_text(message)
+
+async def send_daily(context: ContextTypes.DEFAULT_TYPE):
+    res = requests.get(API_URL).json()
+
+    if not res:
+        return
+
+    message = "🔥 Top 3 Predictions:\n\n"
+
+    for m in res[:3]:
+        message += f"{m['match']} → {m['score']}\n"
+
+    await context.bot.send_message(chat_id=CHAT_ID, text=message)
+
+app = ApplicationBuilder().token(TOKEN).build()
+
+app.add_handler(CommandHandler("start", start))
+app.add_handler(CommandHandler("tips", tips))
+
+scheduler = AsyncIOScheduler()
+scheduler.add_job(send_daily, "cron", hour=10, args=[app.bot])
+scheduler.start()
+
+app.run_polling()
